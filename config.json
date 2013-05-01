@@ -1,0 +1,12 @@
+{
+    "name": "FeaturePlanningBoardApp",
+    "className": "FeaturePlanningBoardApp",
+    "server": "https://rally1.rallydev.com",
+    "sdk": "x",
+    "javascript": [
+        "src/App.js"
+    ],
+    "css": [
+        "styles/app.css"
+    ]
+}
