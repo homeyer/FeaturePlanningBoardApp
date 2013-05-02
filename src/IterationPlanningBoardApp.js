@@ -42,17 +42,10 @@
                     {
                         ptype: 'rallygridboardnotification',
                         rankScope: rankScope
-                    },
-                    {
-                        ptype: 'rallygridboardartifacttypechooser',
-                        artifactTypePreferenceKey: 'iterationplanningboardapp.rallygridboardartifacttypechooser'
                     }
                 ];
 
             var subscription = this.getContext().getSubscription();
-            if (subscription.isHsEdition() || subscription.isExpressEdition()) {
-                plugins.push({ptype: 'rallygridboardmanageiterations'});
-            }
 
             this.gridboard = this.add({
                 xtype: 'iterationplanningboardapptimeboxgridboard',
@@ -60,16 +53,7 @@
                 modelNames: [featureTypePath],
                 plugins: plugins,
                 cardBoardConfig: {
-                    listeners: {
-                        load: function() {
-                            var artifactsPref = this.gridboard.artifactTypeChooserPlugin.artifactsPref;
-                            var allowedArtifacts = this.gridboard.getHeader().getRight().query('checkboxfield');
-                            if (!Ext.isEmpty(artifactsPref) && artifactsPref.length !== allowedArtifacts.length) {
-                                this.gridboard.getGridOrBoard().addLocalFilter('ByType', artifactsPref);
-                            }
-                        },
-                        scope: this
-                    },
+
                     plugins: [
                         // {
                         //     ptype: 'rallytimeboxscrollablecardboard',

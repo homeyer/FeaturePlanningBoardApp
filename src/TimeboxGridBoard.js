@@ -105,7 +105,7 @@
                 flex: this._hasTimeboxes() ? 1 : 1/3,
                 cardLimit: Ext.isIE ? 25 : 100,
                 columnHeaderConfig: {
-                    headerTpl: 'Backlog'
+                    headerTpl: 'Feature Backlog'
                 }
             }];
 
