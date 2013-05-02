@@ -55,25 +55,25 @@
                 cardBoardConfig: {
 
                     plugins: [
-                        // {
-                        //     ptype: 'rallytimeboxscrollablecardboard',
-                        //     backwardsButtonConfig: {
-                        //         elTooltip: 'Previous Iteration'
-                        //     },
-                        //     columnRecordsProperty: 'timeboxRecords',
-                        //     forwardsButtonConfig: {
-                        //         elTooltip: 'Next Iteration'
-                        //     },
-                        //     getFirstVisibleScrollableColumn: function(){
-                        //         return this.getScrollableColumns()[0];
-                        //     },
-                        //     getLastVisibleScrollableColumn: function(){
-                        //         return Rally.util.Array.last(this.getScrollableColumns());
-                        //     },
-                        //     getScrollableColumns: function(){
-                        //         return Ext.Array.slice(this.cmp.getColumns(), 1, this.cmp.getColumns().length);
-                        //     }
-                        // }
+                        {
+                            ptype: 'rallytimeboxscrollablecardboard',
+                            backwardsButtonConfig: {
+                                elTooltip: 'Previous Iteration'
+                            },
+                            columnRecordsProperty: 'timeboxRecords',
+                            forwardsButtonConfig: {
+                                elTooltip: 'Next Iteration'
+                            },
+                            getFirstVisibleScrollableColumn: function(){
+                                return this.getScrollableColumns()[0];
+                            },
+                            getLastVisibleScrollableColumn: function(){
+                                return Rally.util.Array.last(this.getScrollableColumns());
+                            },
+                            getScrollableColumns: function(){
+                                return Ext.Array.slice(this.cmp.getColumns(), 1, this.cmp.getColumns().length);
+                            }
+                        }
                     ]
                 },
                 listeners: {

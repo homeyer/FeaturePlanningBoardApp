@@ -1,0 +1,891 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>FeaturePlanningBoardApp</title>
+
+    <script type="text/javascript" src="https://rally1.rallydev.com/slm/build/sdk/sdk-debug.js?wsapiVersion=1.43"></script>
+
+    <script type="text/javascript">
+
+
+        window.sdkConfig = {
+            apiBaseUrl: 'https://rallytest1.rallydev.com/'
+        };
+    
+        Rally.onReady(function() {
+            (function() {
+                var Ext = window.Ext4 || window.Ext;
+            
+                /**
+                 * @private
+                 * Should this be in rui?
+                 */
+                Ext.define('Rally.apps.iterationplanningboard.IterationPlanningBoardBacklogColumn', {
+                    extend: 'Rally.ui.cardboard.Column',
+                    alias: 'widget.iterationplanningboardappbacklogcolumn',
+            
+                    cls: 'column',
+            
+                    requires: [
+                        'Rally.ui.TextField'
+                    ],
+            
+                    mixins: {
+                        maskable: 'Rally.ui.mask.Maskable'
+                    },
+            
+                    config: {
+                        value: null
+                    },
+            
+                    drawHeader: function() {
+                        this.callParent(arguments);
+            
+                        this.getColumnHeader().add(
+                            {
+                                xtype: 'container',
+                                cls: 'search',
+                                items: [
+                                    {
+                                        xtype: 'rallytextfield',
+                                        cls: 'search-text',
+                                        itemId: 'searchText',
+                                        enableKeyEvents: true,
+                                        emptyText: 'Search',
+                                        listeners: {
+                                            specialkey: this._onSearchTextSpecialKey,
+                                            scope: this
+                                        }
+                                    },
+                                    {
+                                        xtype: 'component',
+                                        cls: 'search-button',
+                                        listeners: {
+                                            click: {
+                                                element: 'el',
+                                                fn: this._onSearchClicked,
+                                                scope: this
+                                            }
+                                        }
+                                    }
+                                ]
+                            }
+                        );
+                    },
+            
+                    initComponent: function() {
+                        this.callParent(arguments);
+            
+                        this.on('afterrender', function() {
+                            var cls = 'planning-column backlog';
+                            this.getContentCell().addCls(cls);
+                            this.getColumnHeaderCell().addCls(cls);
+                        }, this, {single: true});
+                    },
+            
+                    _onSearchClicked: function() {
+                        this._refreshColumn();
+                    },
+            
+                    _onSearchTextSpecialKey: function(searchTextField, e) {
+                        if (e.getKey() == e.ENTER) {
+                            this._refreshColumn();
+                        }
+                    },
+            
+                    _refreshColumn: function() {
+                        if (this.searching) {
+                            return;
+                        }
+            
+                        this.searching = true;
+                        var searchValue = this.getColumnHeader().down('#searchText').getValue();
+                        this.setMaskTarget(this.getContentCell());
+                        this.showMask();
+                        this._deactivatedCards = [];
+            
+                        this.on('load', function() {
+                            this.fireEvent('filter', this);
+                            this.hideMask();
+                            this.searching = false;
+                        }, this, {single: true});
+            
+                        this.refresh({
+                            storeConfig: {
+                                search: searchValue ? Ext.String.trim(searchValue) : ""
+                            }
+                        });
+                    },
+            
+                    getStoreFilter: function(model) {
+                        var filters = [];
+                        Ext.Array.push(filters, this.callParent(arguments));
+                        if (model.elementName === 'HierarchicalRequirement') {
+                            if (this.context.getSubscription().StoryHierarchyEnabled) {
+                                filters.push({
+                                    property: 'DirectChildrenCount',
+                                    value: 0
+                                });
+                            }
+                        } else if (model.elementName === 'Defect') {
+                            filters.push({
+                                property: 'Requirement',
+                                value: null
+                            });
+                        }
+            
+                        return filters;
+                    },
+            
+                    isMatchingRecord: function(record) {
+                        var isMatching = this.callParent(arguments);
+                        if (record.self.elementName === 'HierarchicalRequirement') {
+                            isMatching = isMatching && (!record.hasField('DirectChildrenCount') || record.get('DirectChildrenCount') === 0);
+                        } else if (record.self.elementName === 'Defect') {
+                            isMatching = isMatching && (!record.hasField('Requirement') || !record.get('Requirement'));
+                        }
+                        return isMatching;
+                    }
+                });
+            })();
+            (function() {
+                var Ext = window.Ext4 || window.Ext;
+            
+                /**
+                 * @private
+                 *
+                 * Should this be a generic 'TimeboxColumn' class in rui?
+                 *
+                 * A column that is ideal for iteration (and soon, release) planning. It will render the iteration's start
+                 * and end dates in the header.
+                 *
+                 *     columnConfig: {
+                 *         xtype: 'iterationplanningboardappplanningcolumn',
+                 *         records: [iterationRecord]
+                 *     }
+                 *
+                 * And for releases:
+                 *
+                 *     columnConfig: {
+                 *         xtype: 'iterationplanningboardappplanningcolumn',
+                 *         records: [releaseRecord],
+                 *         startDateField: 'ReleaseStartDate',
+                 *         endDatefield: 'ReleaseEndDate'
+                 *     }
+                 *
+                 */
+                Ext.define('Rally.apps.iterationplanningboard.IterationPlanningBoardColumn', {
+                    extend: 'Rally.ui.cardboard.Column',
+                    alias: 'widget.iterationplanningboardappplanningcolumn',
+            
+                    config: {
+                        /**
+                         * @cfg {String}
+                         * The name of the field inside the record that stores the start date
+                         */
+                        startDateField: 'StartDate',
+            
+                        /**
+                         * @cfg {String}
+                         * The name of the field inside the record that stores the end date
+                         */
+                        endDateField: 'EndDate',
+            
+                        /**
+                         * @cfg {Rally.domain.WsapiModel[]}
+                         * The timebox records (Iteration or Release) for this column
+                         */
+                        timeboxRecords: []
+                    },
+            
+                    cls: 'column',
+            
+                    currentTimeboxCls: 'current-timebox',
+            
+                    requires: [
+                        'Ext.XTemplate'
+                    ],
+            
+                    constructor: function(config) {
+                        this.mergeConfig(config);
+                        this.config = Ext.merge({
+                            columnHeaderConfig: {
+                                record: this._getTimeboxRecord(),
+                                fieldToDisplay: 'Name',
+                                editable: false
+                            }
+                        }, this.config);
+                        this.config.value = Rally.util.Ref.getRelativeUri(this._getTimeboxRecord());
+                        this.config.moreItemsConfig = {
+                            token: Rally.nav.Manager.getDetailHash(this._getTimeboxRecord(), {scope: '', subPage: 'scheduled'})
+                        };
+            
+                        this.callParent([this.config]);
+                    },
+            
+                    initComponent: function() {
+                        this.callParent(arguments);
+                        this.on('beforecarddroppedsave', this._onBeforeCardDrop, this);
+                        this.on('addcard', this._drawProgressBar, this);
+                        this.on('load', this._drawProgressBar, this);
+                        this.on('removecard', this._drawProgressBar, this);
+                        this.on('cardupdated', this._drawProgressBar, this);
+            
+                        this.on('afterrender', function() {
+                            this._addPlanningClasses();
+                        }, this, {single: true});
+                    },
+            
+                    getStoreFilter: function(model) {
+                        var modelName = this._getTimeboxRecord().self.displayName;
+                        return [
+                            {
+                                property: modelName + ".Name",
+                                value: this._getTimeboxRecord().get('Name')
+                            },
+                            {
+                                property: modelName + "." + this.startDateField,
+                                value: Rally.util.DateTime.toIsoString(this._getTimeboxRecord().get(this.startDateField))
+                            },
+                            {
+                                property: modelName + "." + this.endDateField,
+                                value: Rally.util.DateTime.toIsoString(this._getTimeboxRecord().get(this.endDateField))
+                            }
+                        ];
+                    },
+            
+                    isMatchingRecord: function(record) {
+                        return Ext.Array.some(this.timeboxRecords, function(timeboxRecord) {
+                            return Rally.util.Ref.getOidFromRef(record.get('Release')) === timeboxRecord.get('ObjectID');
+                        });
+                    },
+            
+                    drawHeader: function() {
+                        this.callParent(arguments);
+                        this._drawProgressBar();
+                    },
+            
+                    _drawProgressBar: function() {
+                        if(this.progressBar) {
+                            this.progressBar.update(this.getIterationPlanningBoardHeaderTpl().apply(this.getIterationPlanningBoardHeaderTplData()));
+                        } else {
+                            this.progressBar = this.getColumnHeader().add({
+                                xtype: 'container',
+                                html: this.getIterationPlanningBoardHeaderTpl().apply(this.getIterationPlanningBoardHeaderTplData())
+                            });
+                        }
+                    },
+            
+                    getIterationPlanningBoardHeaderTpl: function() {
+                        this.headerTpl = this.headerTpl || Ext.create('Ext.XTemplate',
+                            '<div class="timeboxDates">{formattedStartDate} - {formattedEndDate}</div>',
+                            '{progressBarHtml}'
+                        );
+            
+                        return this.headerTpl;
+                    },
+            
+                    getIterationPlanningBoardHeaderTplData: function() {
+                        return {
+                            formattedStartDate: this._getFormattedDate(this.startDateField),
+                            formattedEndDate: this._getFormattedDate(this.endDateField),
+                            progressBarHtml: this._getProgressBarHtml()
+                        };
+                    },
+            
+                    getProgressBar: function() {
+                        return this.getColumnHeaderCell().down('.progress-bar-background');
+                    },
+            
+                    _getFormattedDate: function(fieldName) {
+                        return Rally.util.DateTime.formatWithNoYearWithDefault(this._getTimeboxRecord().get(fieldName));
+                    },
+            
+                    _getTimeboxRecord: function() {
+                        return this.timeboxRecords[0];
+                    },
+            
+                    _onBeforeCardDrop: function(column, card) {
+                        var cardProjectRef = Rally.util.Ref.getRelativeUri(card.getRecord().get('Project'));
+                        if (cardProjectRef !== Rally.util.Ref.getRelativeUri(column.context.getProject())) {
+            
+                            if (!Ext.Array.some(this.timeboxRecords, function(timeboxRecord) {
+                                return cardProjectRef === Rally.util.Ref.getRelativeUri(timeboxRecord.get('Project'));
+                            })) {
+                                card.getRecord().set('Project', column.context.getProject()._ref);
+                            }
+                        }
+                    },
+            
+                    _getProgressBarHtml: function() {
+                        var totalPointCount = this._getTotalPointCount();
+                        var plannedVelocity = this._getPlannedVelocity();
+                        var tpl = Ext.create('Rally.ui.renderer.template.progressbar.TimeboxProgressBarTemplate', {
+                            height: '14px',
+                            width: '80%'
+                        });
+                        var html = tpl.apply({
+                            percentDone: totalPointCount / plannedVelocity,
+                            amountComplete: totalPointCount,
+                            total: plannedVelocity
+                        });
+            
+                        return html === '' ? html : '<div class="progress-bar-background">' + html + '</div>';
+                    },
+            
+                    _getTotalPointCount: function() {
+                        var sum = 0;
+                        Ext.Array.each(this.getCards(true), function(card) {
+                            var planEstimate = card.getRecord().get('PlanEstimate');
+                            if (Ext.isNumber(planEstimate)) {
+                                sum += planEstimate;
+                            }
+                        });
+                        return sum;
+                    },
+            
+                    _getPlannedVelocity: function() {
+                        var sum = 0;
+                        Ext.Array.each(this.timeboxRecords, function(timeboxRecord) {
+                            var plannedVelocity = timeboxRecord.get('PlannedVelocity');
+                            if (Ext.isNumber(plannedVelocity)) {
+                                sum += plannedVelocity;
+                            }
+                        }, this);
+                        return sum;
+                    },
+            
+                    _isCurrentTimebox: function(){
+                        var now = new Date();
+                        return this._getTimeboxRecord().get('StartDate') <= now && this._getTimeboxRecord().get('EndDate') >= now;
+                    },
+            
+                    _addPlanningClasses: function() {
+                        var cls = 'planning-column';
+                        if (this._isCurrentTimebox()) {
+                            cls += ' ' + this.currentTimeboxCls;
+            
+                        }
+                        this.getContentCell().addCls(cls);
+                        this.getColumnHeaderCell().addCls(cls);
+                    }
+                });
+            })();
+            (function() {
+                var Ext = window.Ext4 || window.Ext;
+            
+                /**
+                 * @private
+                 *
+                 * If we end up having both an IterationPlanningBoardApp and a RelasePlanningBoardApp, then this should probably be in rui.
+                 *
+                 * A GridBoard that displays timebox information.
+                 */
+                Ext.define('Rally.apps.iterationplanningboard.TimeboxGridBoard', {
+                    extend: 'Rally.ui.gridboard.GridBoard',
+                    alias: 'widget.iterationplanningboardapptimeboxgridboard',
+                    requires: [
+                        'Rally.util.Array',
+                        'Rally.util.Ui',
+                        'Rally.data.ModelFactory',
+                        'Rally.ui.gridboard.TimeboxBlankSlate',
+                        'Rally.apps.iterationplanningboard.IterationPlanningBoardBacklogColumn',
+                        'Rally.apps.iterationplanningboard.IterationPlanningBoardColumn'
+                    ],
+                    mixins: ['Rally.Messageable'],
+            
+                    /**
+                     * @cfg {Number}
+                     */
+                    numColumns: 3,
+            
+                    initComponent: function() {
+                        this.on('toggle', function(toggleState, gridOrBoard) {
+                            if (toggleState === 'board' && !this._hasTimeboxes()) {
+                                this.mon(gridOrBoard, 'aftercolumnrender', this._addBoardBlankSlate, this);
+                            }
+                        }, this);
+            
+                        this.subscribe(Rally.Message.objectCreate, this._onObjectChange, this);
+                        this.subscribe(Rally.Message.objectUpdate, this._onObjectChange, this);
+                        this.subscribe(Rally.Message.objectDestroy, this._onObjectChange, this);
+            
+                        this.callParent(arguments);
+                    },
+                    
+                    _addGridOrBoard: function() {
+                        if (!this.timeboxes) {
+                            this.timeboxType = 'Release';
+                            Rally.data.ModelFactory.getModel({
+                                type: this.timeboxType,
+                                context: this.getContext().getDataContext(),
+                                success: this._findTimeboxes,
+                                scope: this
+                            });
+                            this.setLoading(true);
+                        } else {
+                            this.callParent(arguments);
+                        }
+                    },
+            
+                    _getBoardConfig: function() {
+                        var initiallyVisibleTimeboxes = this._getInitiallyVisibleTimeboxes();
+                        var columns = this._getColumnConfigs(initiallyVisibleTimeboxes);
+                        return Ext.merge(this.callParent(arguments), {
+                            attribute: this.timeboxType,
+                            columns: columns,
+                            columnConfig: {
+                                xtype: 'iterationplanningboardappplanningcolumn',
+                                additionalFetchFields: [],
+                                startDateField: 'ReleaseStartDate',
+                                endDateField: 'ReleaseDate',
+                                storeConfig : {
+                                    fetch: ['Parent']
+                                }
+                            },
+                            cardConfig: {
+                                editable: true,
+                                showHeaderMenu: true,
+                                fields: ['Parent', 'UserStories', 'Discussion', 'PlanEstimate']
+                            },
+                            scrollableColumnRecords: this.timeboxes
+                        });
+                    },
+            
+                    _getInitiallyVisibleTimeboxes: function(){
+                        if(this.timeboxes.length <= this.numColumns){
+                            return this.timeboxes;
+                        }
+            
+                        var previousTimeboxes = [];
+                        var futureAndCurrentTimeboxes = [];
+                        Ext.Array.each(this.timeboxes, function(timeboxRecords){
+                            if(timeboxRecords[0].get('ReleaseEndDate') >= new Date()){
+                                futureAndCurrentTimeboxes.push(timeboxRecords);
+                            }else{
+                                previousTimeboxes.push(timeboxRecords);
+                            }
+                        });
+                        futureAndCurrentTimeboxes = Rally.util.Array.firstElementsOf(futureAndCurrentTimeboxes, this.numColumns);
+            
+                        var possiblyVisibleTimeboxes = previousTimeboxes.concat(futureAndCurrentTimeboxes);
+                        return Rally.util.Array.lastElementsOf(possiblyVisibleTimeboxes, this.numColumns);
+                    },
+            
+                    _getColumnConfigs: function(timeboxes) {
+                        var columns = [{
+                            xtype: 'iterationplanningboardappbacklogcolumn',
+                            flex: this._hasTimeboxes() ? 1 : 1/3,
+                            cardLimit: Ext.isIE ? 25 : 100,
+                            columnHeaderConfig: {
+                                headerTpl: 'Feature Backlog'
+                            }
+                        }];
+            
+                        Ext.Array.each(timeboxes, function(timeboxRecords) {
+                            columns.push({
+                                timeboxRecords: timeboxRecords,
+                                columnHeaderConfig: {
+                                    record: timeboxRecords[0],
+                                    fieldToDisplay: 'Name',
+                                    editable: false
+                                }
+                            });
+                        }, this);
+            
+                        return columns;
+                    },
+            
+                    _hasTimeboxes: function() {
+                        return this.timeboxes && this.timeboxes.length > 0;
+                    },
+            
+                    _findTimeboxes: function(model) {
+                        Ext.create('Rally.data.WsapiDataStore', {
+                            model: model,
+                            fetch: ['Name', 'ReleaseStartDate', 'ReleaseDate', 'Project', 'PlannedVelocity'],
+                            autoLoad: true,
+                            listeners: {
+                                load: this._onTimeboxesLoad,
+                                scope: this
+                            },
+                            context: this.getContext().getDataContext(),
+                            limit: Infinity
+                        });
+                    },
+            
+                    _addBoardBlankSlate: function(board) {
+                        this.addCls('no-timebox');
+                        board.getEl().down('.columns tr td').setStyle('width', '33%');
+                        var blankSlateTd = Ext.DomHelper.append(board.getEl().down('.columns tr'), '<td class="blank-slate-column"></td>', true);
+            
+                        var blankSlate = Ext.widget({
+                            xtype: 'rallytimeboxblankslate',
+                            timeboxType: this.timeboxType,
+                            context: this.getContext(),
+                            renderTo: blankSlateTd
+                        });
+            
+                        this.on('destroy', function() {
+                            blankSlate.destroy();
+                        });
+            
+                        if (Rally.BrowserTest) {
+                            Rally.BrowserTest.publishComponentReady(this);
+                        }
+                    },
+            
+                    _onTimeboxesLoad: function(store) {
+                        var likeTimeboxesObj = {};
+                        store.each(function(timebox) {
+                            var timeboxKey = Ext.String.format("{0}{1}{2}",
+                                timebox.get('Name'), timebox.get('ReleaseStartDate'), timebox.get('ReleaseDate'));
+                            likeTimeboxesObj[timeboxKey] = Ext.Array.push(likeTimeboxesObj[timeboxKey] || [], timebox);
+                        });
+            
+                        var sortedLikeTimeboxes = Ext.Array.sort(Ext.Object.getValues(likeTimeboxesObj), function(likeTimeboxes1, likeTimeboxes2) {
+                            return likeTimeboxes1[0].get('ReleaseDate') - likeTimeboxes2[0].get('ReleaseDate');
+                        });
+            
+                        this.timeboxes = Ext.Array.filter(sortedLikeTimeboxes, function(likeTimeboxes) {
+                            return Ext.Array.some(likeTimeboxes, function(timebox) {
+                                return Rally.util.Ref.getRelativeUri(timebox.get('Project')) === Rally.util.Ref.getRelativeUri(this.getContext().getProject());
+                            }, this);
+                        }, this);
+            
+                        this.setLoading(false);
+                        this._addGridOrBoard('board');
+                    },
+            
+                    _onObjectChange: function(record) {
+                        if (Ext.isArray(record)) {
+                            Ext.Array.each(record, this._onObjectChange, this);
+                            return;
+                        }
+            
+                        if (record.get('_type').toLowerCase() === this.timeboxType.toLowerCase()) {
+                            var gridOrBoard = this.getGridOrBoard();
+                            if (gridOrBoard) {
+                                gridOrBoard.destroy();
+                            }
+            
+                            this.timeboxes = null;
+                            this._addGridOrBoard();
+                        }
+                    }
+                });
+            })();
+            (function() {
+                var Ext = window.Ext4 || window.Ext;
+            
+                /**
+                 * @private
+                 * Allows the Iteration Planning Board CardBoard to be scrolled forwards and backwards
+                 */
+                Ext.define('Rally.apps.iterationplanningboard.TimeboxScrollable', {
+                    alias: 'plugin.rallytimeboxscrollablecardboard',
+                    extend: 'Rally.ui.cardboard.plugin.Scrollable',
+                    requires:['Rally.util.Array'],
+            
+                    _isBackwardsButtonHidden: function(){
+                        return this.cmp.scrollableColumnRecords[0] === this.getFirstVisibleScrollableColumn().timeboxRecords;
+                    },
+            
+                    _isForwardsButtonHidden: function(){
+                        return Rally.util.Array.last(this.cmp.scrollableColumnRecords) === this.getLastVisibleScrollableColumn().timeboxRecords;
+                    },
+            
+                    _scroll: function(forwards){
+                        var insertNextToColumn = this._getInsertNextToColumn(forwards);
+                        var newlyVisibleRecords = this.cmp.scrollableColumnRecords[Ext.Array.indexOf(this.cmp.scrollableColumnRecords, insertNextToColumn.timeboxRecords) + (forwards ? 1 : -1)];
+            
+                        var indexOfNewColumn = Ext.Array.indexOf(this.cmp.getColumns(), insertNextToColumn);
+                        this.cmp.destroyColumn(this._getColumnToRemove(forwards));
+            
+                        var column = this.cmp.addColumn({timeboxRecords: newlyVisibleRecords}, indexOfNewColumn);
+                        column.on('ready', this._onNewlyAddedColumnReady, this, {single: true});
+            
+                        var columnEls = this.cmp.createColumnElements(forwards ? 'after' : 'before', insertNextToColumn);
+                        this.cmp.renderColumn(column, columnEls.th, columnEls.td);
+            
+                        this._afterScroll(forwards);
+                    },
+            
+                    _onNewlyAddedColumnReady: function(){
+                        this.cmp.applyLocalFilters && this.cmp.applyLocalFilters();
+                    },
+            
+                    _sizeButtonToColumnHeader: function(button, column){
+                        var columnHeaderHeight = column.getColumnHeaderCell().getHeight(Ext.isGecko || Ext.isIE);
+            
+                        if(column.getProgressBar()){
+                            columnHeaderHeight = column.getProgressBar().getTop() - column.getColumnHeader().getEl().getTop();
+                        }
+            
+                        button.getEl().setHeight(columnHeaderHeight);
+                    }
+                });
+            })();            (function() {
+                var Ext = window.Ext4 || window.Ext;
+            
+                /**
+                 * Iteration Planning Board App
+                 * The Iteration Planning Board can be used to visualize and assign your User Stories and Defects within the appropriate iteration.
+                 */
+                Ext.define('Rally.apps.iterationplanningboard.IterationPlanningBoardApp', {
+                    extend: 'Rally.app.App',
+                    requires: [
+                        'Rally.data.ModelFactory',
+                        'Rally.apps.iterationplanningboard.TimeboxGridBoard',
+                        'Rally.apps.iterationplanningboard.TimeboxScrollable',
+                        'Rally.ui.gridboard.plugin.GridBoardAddNew',
+                        'Rally.ui.gridboard.plugin.GridBoardNotification',
+                        'Rally.ui.gridboard.plugin.GridBoardArtifactTypeChooser',
+                        'Rally.ui.gridboard.plugin.GridBoardManageIterations',
+                        'Rally.util.Array'
+                    ],
+                    cls: 'planning-board',
+            
+                    launch: function() {
+            
+                        Rally.data.util.PortfolioItemHelper.loadTypeOrDefault({
+                            defaultToLowest: true,
+                            success: function(lowestLevelPITypeDefRecord){
+                                var featureTypePath = lowestLevelPITypeDefRecord.get('TypePath');
+                                this._showBoard(featureTypePath);        
+                            },
+                            scope: this
+                        });
+                        
+                    },
+            
+                    _showBoard: function(featureTypePath) {
+                        var rankScope = 'BACKLOG',
+                            plugins = [
+                                {
+                                    ptype: 'rallygridboardaddnew',
+                                    rankScope: rankScope
+                                },
+                                {
+                                    ptype: 'rallygridboardnotification',
+                                    rankScope: rankScope
+                                }
+                            ];
+            
+                        var subscription = this.getContext().getSubscription();
+            
+                        this.gridboard = this.add({
+                            xtype: 'iterationplanningboardapptimeboxgridboard',
+                            context: this.getContext(),
+                            modelNames: [featureTypePath],
+                            plugins: plugins,
+                            cardBoardConfig: {
+            
+                                plugins: [
+                                    {
+                                        ptype: 'rallytimeboxscrollablecardboard',
+                                        backwardsButtonConfig: {
+                                            elTooltip: 'Previous Iteration'
+                                        },
+                                        columnRecordsProperty: 'timeboxRecords',
+                                        forwardsButtonConfig: {
+                                            elTooltip: 'Next Iteration'
+                                        },
+                                        getFirstVisibleScrollableColumn: function(){
+                                            return this.getScrollableColumns()[0];
+                                        },
+                                        getLastVisibleScrollableColumn: function(){
+                                            return Rally.util.Array.last(this.getScrollableColumns());
+                                        },
+                                        getScrollableColumns: function(){
+                                            return Ext.Array.slice(this.cmp.getColumns(), 1, this.cmp.getColumns().length);
+                                        }
+                                    }
+                                ]
+                            },
+                            listeners: {
+                                load: this._onLoad,
+                                toggle: this._publishContentUpdated,
+                                recordupdate: this._publishContentUpdatedNoDashboardLayout,
+                                recordcreate: this._publishContentUpdatedNoDashboardLayout,
+                                preferencesaved: this._publishPreferenceSaved,
+                                scope: this
+                            }
+                        });
+                    },
+            
+                    _onLoad: function() {
+                        this._publishContentUpdated();
+                        if (Rally.BrowserTest) {
+                            Rally.BrowserTest.publishComponentReady(this);
+                        }
+                    },
+            
+                    _publishContentUpdated: function() {
+                        this.fireEvent('contentupdated');
+                    },
+            
+                    _publishContentUpdatedNoDashboardLayout: function() {
+                        this.fireEvent('contentupdated', {dashboardLayout: false});
+                    },
+            
+                    _publishPreferenceSaved: function(record) {
+                        this.fireEvent('preferencesaved', record);
+                    }
+                });
+            })();
+
+            Rally.launchApp('Rally.apps.iterationplanningboard.IterationPlanningBoardApp', {
+                name: 'FeaturePlanningBoardApp'
+            });
+        });
+    </script>
+
+    <style type="text/css">
+        .planning-board .header {
+            padding: 5px 5px 5px 10px;
+        }
+        
+        .planning-board .cardboard {
+            margin: 0 14px 0 10px;
+        }
+        
+        .planning-board .header .add-new {
+            float: left;
+        }
+        
+        .planning-board .show-label {
+            float: right;
+            margin-top: 3px;
+        }
+        
+        .planning-board .type-checkbox {
+            float: right;
+            margin: 5px;
+        }
+        
+        .planning-board .manage-iterations {
+            float: right;
+            margin: 3px 10px 0 0;
+        }
+        
+        .planning-board .artifact-type-chooser {
+            margin-top: 4px;
+        }
+        
+        /*Remove with NO_IE7_COMPAT toggle */
+        .ext-ie .planning-board .artifact-type-chooser {
+            width: 190px;
+        }
+        
+        .planning-board .type-checkbox label {
+            position: relative;
+            top: 1px;
+        }
+        
+        .planning-board .add-new label {
+            padding-top: 0;
+        }
+        
+        .planning-board .add-new .new {
+            margin-left: 0;
+        }
+        
+        th.planning-column {
+            background-color: #f5f5f5;
+        }
+        
+        .planning-column .columnTitle {
+            font-size: 18px;
+            font-weight: bold;
+            color: #333333;
+        }
+        
+        .planning-column .timeboxDates {
+            font-size: 12px;
+            font-weight: bold;
+            color: #8f8f8f;
+            margin-bottom: 7px;
+        }
+        
+        .planning-column.current-timebox .rui-card-slim {
+            box-shadow: #C0C0C0 2px 2px;
+            -moz-box-shadow: #C0C0C0 2px 2px;
+            -webkit-box-shadow: #C0C0C0 2px 2px;
+        }
+        
+        .progress-bar-background {
+            background-color: #424242;
+            padding: 6px 0;
+        }
+        
+        .progress-bar-container {
+            margin: 0 auto;
+        }
+        
+        .progress-bar-container .progress-bar-label {
+            color: #333333;
+            font-size: 12px;
+        }
+        
+        .planning-board .cardboard .column-container .column-header .column-header-title {
+            padding: 15px 0 0 0;
+        }
+        
+        .planning-column.current-timebox .column-header {
+            background: #ffffff url('currentIterationColumnHeader.png') repeat-x bottom;
+        }
+        
+        .cardboard .column-container .planning-column.current-timebox {
+            background-color: #c6c6c6;
+            border-right: 2px solid #8f8f8f;
+            border-top: 2px solid #8f8f8f;
+            border-left: 2px solid #8f8f8f;
+        }
+        
+        .cardboard .column-container td.planning-column.current-timebox {
+            border-top: 1px solid #8f8f8f;
+        }
+        
+        .cardboard .column-container .planning-column {
+            border-top: 2px solid transparent;
+        }
+        
+        .planning-column .column-header {
+            min-height: 70px;
+        }
+        
+        .planning-column.backlog .search {
+            margin: 5px 30px 0 30px;
+            padding-right: 21px;
+        }
+        
+        .planning-column.backlog .search > div {
+            overflow-x: hidden;
+        }
+        
+        .planning-column.backlog .search .search-text {
+            float: left;
+            width: 100%;
+        }
+        
+        .planning-column.backlog .search-button {
+            background: transparent url('search-button.gif');
+            width: 15px;
+            height: 15px;
+            background-size: 15px 15px;
+            background-repeat: no-repeat;
+            cursor: pointer;
+            float: right;
+            margin: 4px -21px 0 6px;
+        }
+        
+        .planning-board .no-timebox .columns tr td.blank-slate-column {
+            width: 66%;
+            text-align: center;
+            vertical-align: top;
+        }
+    </style>
+</head>
+<body></body>
+</html>

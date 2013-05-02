@@ -1,12 +1,16 @@
 {
     "name": "FeaturePlanningBoardApp",
-    "className": "FeaturePlanningBoardApp",
-    "server": "https://rally1.rallydev.com",
+    "className": "Rally.apps.iterationplanningboard.IterationPlanningBoardApp",
+    "server": "https://rallytest1.rallydev.com",
     "sdk": "x",
     "javascript": [
-        "src/App.js"
+        "src/IterationPlanningBoardBacklogColumn.js",
+        "src/IterationPlanningBoardColumn.js",
+        "src/TimeboxGridBoard.js",
+        "src/TimeboxScrollable.js",
+        "src/IterationPlanningBoardApp.js"
     ],
     "css": [
-        "styles/app.css"
+        "styles/IterationPlanningBoardApp.css"
     ]
 }
