@@ -20,10 +20,19 @@
         cls: 'planning-board',
 
         launch: function() {
-            this._showBoard();
+
+            Rally.data.util.PortfolioItemHelper.loadTypeOrDefault({
+                defaultToLowest: true,
+                success: function(lowestLevelPITypeDefRecord){
+                    var featureTypePath = lowestLevelPITypeDefRecord.get('TypePath');
+                    this._showBoard(featureTypePath);        
+                },
+                scope: this
+            });
+            
         },
 
-        _showBoard: function() {
+        _showBoard: function(featureTypePath) {
             var rankScope = 'BACKLOG',
                 plugins = [
                     {
@@ -48,7 +57,7 @@
             this.gridboard = this.add({
                 xtype: 'iterationplanningboardapptimeboxgridboard',
                 context: this.getContext(),
-                modelNames: ['User Story', 'Defect'],
+                modelNames: [featureTypePath],
                 plugins: plugins,
                 cardBoardConfig: {
                     listeners: {
@@ -61,27 +70,27 @@
                         },
                         scope: this
                     },
-                    plugins: this.getContext().isFeatureEnabled('SCROLLING_ON_CARDBOARD') ? [
-                        {
-                            ptype: 'rallytimeboxscrollablecardboard',
-                            backwardsButtonConfig: {
-                                elTooltip: 'Previous Iteration'
-                            },
-                            columnRecordsProperty: 'timeboxRecords',
-                            forwardsButtonConfig: {
-                                elTooltip: 'Next Iteration'
-                            },
-                            getFirstVisibleScrollableColumn: function(){
-                                return this.getScrollableColumns()[0];
-                            },
-                            getLastVisibleScrollableColumn: function(){
-                                return Rally.util.Array.last(this.getScrollableColumns());
-                            },
-                            getScrollableColumns: function(){
-                                return Ext.Array.slice(this.cmp.getColumns(), 1, this.cmp.getColumns().length);
-                            }
-                        }
-                    ] : []
+                    plugins: [
+                        // {
+                        //     ptype: 'rallytimeboxscrollablecardboard',
+                        //     backwardsButtonConfig: {
+                        //         elTooltip: 'Previous Iteration'
+                        //     },
+                        //     columnRecordsProperty: 'timeboxRecords',
+                        //     forwardsButtonConfig: {
+                        //         elTooltip: 'Next Iteration'
+                        //     },
+                        //     getFirstVisibleScrollableColumn: function(){
+                        //         return this.getScrollableColumns()[0];
+                        //     },
+                        //     getLastVisibleScrollableColumn: function(){
+                        //         return Rally.util.Array.last(this.getScrollableColumns());
+                        //     },
+                        //     getScrollableColumns: function(){
+                        //         return Ext.Array.slice(this.cmp.getColumns(), 1, this.cmp.getColumns().length);
+                        //     }
+                        // }
+                    ]
                 },
                 listeners: {
                     load: this._onLoad,

@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>FeaturePlanningBoardApp</title>
+
+    <script type="text/javascript" src="https://rally1.rallydev.com/slm/build/sdk/sdk-debug.js?wsapiVersion=1.43"></script>
+
+    <script type="text/javascript">
+
+        //hack bug fix in Server.js
+        Rally.env.Server.prototype.constructor = function(config){
+            this.mergeConfig(config);
+        };
+
+        window.sdkConfig = {
+            apiBaseUrl: 'https://test9cluster.rallydev.com/'
+        };
+
+        Rally.onReady(function() {
+            Rally.loadScripts([
+                "src/IterationPlanningBoardBacklogColumn.js",
+                "src/IterationPlanningBoardColumn.js",
+                "src/TimeboxGridBoard.js",
+                "src/TimeboxScrollable.js",
+                "src/IterationPlanningBoardApp.js"
+            ], function() {
+                Rally.launchApp('Rally.apps.iterationplanningboard.IterationPlanningBoardApp', {
+                    name: 'FeaturePlanningBoardApp'
+                })
+            }, true);
+        });
+    </script>
+
+<link rel="stylesheet" type="text/css" href="styles/IterationPlanningBoardApp.css">
+</head>
+<body></body>
+</html>

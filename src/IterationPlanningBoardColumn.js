@@ -106,7 +106,7 @@
 
         isMatchingRecord: function(record) {
             return Ext.Array.some(this.timeboxRecords, function(timeboxRecord) {
-                return Rally.util.Ref.getOidFromRef(record.get('Iteration')) === timeboxRecord.get('ObjectID');
+                return Rally.util.Ref.getOidFromRef(record.get('Release')) === timeboxRecord.get('ObjectID');
             });
         },
 

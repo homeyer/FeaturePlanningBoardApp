@@ -42,7 +42,7 @@
         
         _addGridOrBoard: function() {
             if (!this.timeboxes) {
-                this.timeboxType = 'Iteration';
+                this.timeboxType = 'Release';
                 Rally.data.ModelFactory.getModel({
                     type: this.timeboxType,
                     context: this.getContext().getDataContext(),
@@ -63,15 +63,17 @@
                 columns: columns,
                 columnConfig: {
                     xtype: 'iterationplanningboardappplanningcolumn',
-                    additionalFetchFields: ['PortfolioItem'],
+                    additionalFetchFields: [],
+                    startDateField: 'ReleaseStartDate',
+                    endDateField: 'ReleaseDate',
                     storeConfig : {
-                        fetch: ['Parent', 'Requirement']
+                        fetch: ['Parent']
                     }
                 },
                 cardConfig: {
                     editable: true,
                     showHeaderMenu: true,
-                    fields: ['Parent', 'Tasks', 'Defects', 'Discussion', 'PlanEstimate']
+                    fields: ['Parent', 'UserStories', 'Discussion', 'PlanEstimate']
                 },
                 scrollableColumnRecords: this.timeboxes
             });
@@ -85,7 +87,7 @@
             var previousTimeboxes = [];
             var futureAndCurrentTimeboxes = [];
             Ext.Array.each(this.timeboxes, function(timeboxRecords){
-                if(timeboxRecords[0].get('EndDate') >= new Date()){
+                if(timeboxRecords[0].get('ReleaseEndDate') >= new Date()){
                     futureAndCurrentTimeboxes.push(timeboxRecords);
                 }else{
                     previousTimeboxes.push(timeboxRecords);
@@ -128,7 +130,7 @@
         _findTimeboxes: function(model) {
             Ext.create('Rally.data.WsapiDataStore', {
                 model: model,
-                fetch: ['Name', 'StartDate', 'EndDate', 'Project', 'PlannedVelocity'],
+                fetch: ['Name', 'ReleaseStartDate', 'ReleaseDate', 'Project', 'PlannedVelocity'],
                 autoLoad: true,
                 listeners: {
                     load: this._onTimeboxesLoad,
@@ -164,12 +166,12 @@
             var likeTimeboxesObj = {};
             store.each(function(timebox) {
                 var timeboxKey = Ext.String.format("{0}{1}{2}",
-                    timebox.get('Name'), timebox.get('StartDate'), timebox.get('EndDate'));
+                    timebox.get('Name'), timebox.get('ReleaseStartDate'), timebox.get('ReleaseDate'));
                 likeTimeboxesObj[timeboxKey] = Ext.Array.push(likeTimeboxesObj[timeboxKey] || [], timebox);
             });
 
             var sortedLikeTimeboxes = Ext.Array.sort(Ext.Object.getValues(likeTimeboxesObj), function(likeTimeboxes1, likeTimeboxes2) {
-                return likeTimeboxes1[0].get('EndDate') - likeTimeboxes2[0].get('EndDate');
+                return likeTimeboxes1[0].get('ReleaseDate') - likeTimeboxes2[0].get('ReleaseDate');
             });
 
             this.timeboxes = Ext.Array.filter(sortedLikeTimeboxes, function(likeTimeboxes) {
